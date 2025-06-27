@@ -2,6 +2,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 from bs4 import BeautifulSoup
 from datetime import datetime
 import pandas as pd
@@ -39,18 +40,21 @@ lupa.click()
 
 ### Entrar en el CLUB DESEADO.
 # Esperar a que desaparezca el fondo de carga tras la búsqueda
-WebDriverWait(driver, 10).until(
-    EC.invisibility_of_element_located((By.CLASS_NAME, 'fondo-opaco')))
+try:
+    WebDriverWait(driver, 5).until(
+        EC.invisibility_of_element_located((By.CLASS_NAME, 'fondo-opaco')))
+except TimeoutException:
+    pass
 # Esperar a que aparezcan todas las entidades visibles
-WebDriverWait(driver, 10).until(
-    EC.presence_of_element_located((By.CLASS_NAME, 'nombre-club')))
-# Recoger todos los elementos que contienen esa palabra en su texto
-clubs = driver.find_elements(By.CLASS_NAME, 'nombre-club')
-# Si no se encuentra NINGUNO
-if not clubs:
+try:
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CLASS_NAME, 'nombre-club')))
+except TimeoutException:
     print(f"\nNo se encontraron entidades que contengan: {entidad}")
     driver.quit()
     exit()
+# Recoger todos los elementos que contienen esa palabra en su texto
+clubs = driver.find_elements(By.CLASS_NAME, 'nombre-club')
 # Si solo hay UNO, lo seleccionamos directamente
 if len(clubs) == 1:
     club = clubs[0]
@@ -124,7 +128,7 @@ driver.execute_script("arguments[0].click();", cat_elegida)
 fases = driver.find_elements(By.CLASS_NAME, 'fase')
 fases_visibles = [f for f in fases if f.is_displayed()]
 # Validación por si no se encuentra ninguna
-if not fases_visibles:
+if len(fases_visibles) == 0:
     print("No se encontraron fases visibles.")
     driver.quit()
     exit()
@@ -160,6 +164,9 @@ print(f"\nFase seleccionada.")
 
 ### OBTENCIÓN DE LA INFORMACIÓN (equipos, calendario y lugar de juego) ###
 
+# Espera a que desaparezca fondo de carga (por si se ha activado otra vez)
+WebDriverWait(driver, 10).until(
+    EC.invisibility_of_element_located((By.CLASS_NAME, "fondo-opaco")))
 # Obtención de EQUIPOS
 equipos_btn = WebDriverWait(driver, 10).until(
     EC.element_to_be_clickable((By.CSS_SELECTOR, "div.item.equipos"))) # boton
@@ -179,7 +186,7 @@ for i, nombre in enumerate(nombres_equipos, start=1):
 calendario_btn = WebDriverWait(driver, 10).until(
     EC.element_to_be_clickable((By.CSS_SELECTOR, "div.item.calendario"))) # boton
 driver.execute_script("arguments[0].scrollIntoView(true);", calendario_btn) # scroll
-calendario_btn.click()
+driver.execute_script("arguments[0].click();", calendario_btn)
 
 # Asegúrate de que los partidos están cargados (usa .wrap-partido o lo que identifique el contenido)
 WebDriverWait(driver, 15).until(
@@ -214,7 +221,7 @@ for partido in partidos:
     local = equipos[0].text.strip()
     visitante = equipos[1].text.strip()
 
-    if equipo not in [local, visitante]: # 'equipo': definida por el usuario, linea 121 aprox.
+    if equipo not in [local, visitante]: # 'equipo': definida por el usuario, linea 117 aprox.
         continue  # Filtramos partidos que no nos interesan
 
     fecha_hora = partido.select_one("div.grid_footer .item").text.strip()
@@ -298,9 +305,5 @@ with pd.ExcelWriter(nombre_excel, engine="xlsxwriter") as writer:
 
 print(f'\nCalendario exportado de forma correcta ({len(df)} partidos) como {nombre_excel}.')
 
-
-
-
-
-
-
+# Cerrar Firefox
+driver.quit()
